@@ -24,7 +24,8 @@ def getAndUpdateColour():
         red = data[3] + data[2] / 256 # Index 2 (red low) and Index 3 (red high)
         blue  = (data[5] + data[4] / 256) * 2 # Index 4 (blue low) and Index 5 (blue high). Multiplied by 2 due to measurement failure.
 
-        # Calibrate the measured colors and printing:
+        # Note to self: We need to make a minimum and maximum value for reading. Meaning that we should print "No measurement" when 
+        # we are not reading a specific color (either red, green or blue)
 
         # Checking the different conditions and printing the color:
         if red > green and red > blue:
