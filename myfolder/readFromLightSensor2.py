@@ -27,17 +27,21 @@ def getAndUpdateColour():
         # Note to self: We need to make a minimum and maximum value for reading. Meaning that we should print "No measurement" when 
         # we are not reading a specific color (either red, green or blue)
 
+        color = ""
+
         # Checking the different conditions and printing the color:
         if red > green and red > blue:
-            print("Red")
+            color = "Red"
         elif green > red and green > blue:
-            print("Green")
+            color = "Green"
         else:
-            print("Blue")
+            color = "Blue"
 
+        print("RGB(#d, %d, %d)" % (red, green, blue))
         # Output data to the console as RGB values
-        #print("RGB(%d, %d, %d)" % (red, green, blue))
-        
+
+        print("Color; " + color)
+
         # Sleep for two seconds before it reads again
         time.sleep(2)
 
