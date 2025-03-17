@@ -22,7 +22,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.qos import QoSProfile
 from sensor_msgs.msg import LaserScan
-
+import numpy as np
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -38,6 +38,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.has_scan_received = False
 
         self.stop_distance = 0.4
+        self.turn_distance = 0.5
         self.tele_twist = Twist()
         self.tele_twist.linear.x = 0.1
         self.tele_twist.angular.z = 0.0
@@ -109,14 +110,24 @@ class Turtlebot3ObstacleDetection(Node):
         back1h = min(min(self.scan_ranges[p11:p13]))
         back2h = min(min(self.scan_ranges[p13:p15]))
         front2h = min(min(self.scan_ranges[p15:p17]))
-        front1h = min(min(self.scan_ranges[p17:p19]))
+        front1h = min(min(self.scan_ranges[p7:p19]))
 
-
+        # Angular velocity calculation:
+        self.tele_twist.angular.z = (np.pi / 2) * (self.tele_twist.linear.x / front)
+        
         obstacle_distance = min(
             min(self.scan_ranges[0:left_range]),
             min(self.scan_ranges[right_range:360])
         )
         twist = Twist()
+
+        # Cases for navigation:
+        # Case if nothing is in front of the robot:
+        if front > self.turn_distance:
+            # Moving forward with 0.1 m/s
+            twist.linear.x = 0.1
+
+        
 
         if obstacle_distance < self.stop_distance:
             twist.linear.x = 0.0
@@ -125,6 +136,7 @@ class Turtlebot3ObstacleDetection(Node):
         else:
             twist = self.tele_twist
 
+        # Publishing the twist:
         self.cmd_vel_pub.publish(twist)
 
         
