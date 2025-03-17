@@ -78,13 +78,39 @@ class Turtlebot3ObstacleDetection(Node):
             if self.scan_ranges[i] == 0.0:
                 self.scan_ranges[i] = 3.5
 
-
+        # Splitting into cones:
         left_range = int(len(self.scan_ranges) / 4)
         right_range = int(len(self.scan_ranges) * 3 / 4)
         
+        # New points in the circle of the sensor.
+        # Each name is: px (where x is x/20)
+        p1 = int(len(self.scan_ranges) * 1/20)   # 18° from center
+        p3 = int(len(self.scan_ranges) * 3/20)   # 54° from center
+        p5 = int(len(self.scan_ranges) * 5/20)   # 90° from center (quarter circle)
+        p7 = int(len(self.scan_ranges) * 7/20)   # 126° from center
+        p9 = int(len(self.scan_ranges) * 9/20)   # 162° from center
+        p11 = int(len(self.scan_ranges) * 11/20) # 198° from center
+        p13 = int(len(self.scan_ranges) * 13/20) # 234° from center
+        p15 = int(len(self.scan_ranges) * 15/20) # 270° from center (three-quarter circle)
+        p17 = int(len(self.scan_ranges) * 17/20) # 306° from center
+        p19 = int(len(self.scan_ranges) * 19/20) # 342° from center
+
         # Testing:
         #print(f"Left readings: {self.scan_ranges[0:left_range]}")
         #print(f"Right readings: {self.scan_ranges[right_range:len(self.scan_ranges)]}")
+
+        # Taking the minimum of each reading of each cone:
+        front = min(min(self.scan_ranges[p19: p1]))
+        front1v = min(min(self.scan_ranges[p1:p3]))
+        front2v = min(min(self.scan_ranges[p3:p5]))
+        back2v = min(min(self.scan_ranges[p5:p7]))
+        back1v = min(min(self.scan_ranges[p7:p9]))
+        back = min(min(self.scan_ranges[p9:p11]))
+        back1h = min(min(self.scan_ranges[p11:p13]))
+        back2h = min(min(self.scan_ranges[p13:p15]))
+        front2h = min(min(self.scan_ranges[p15:p17]))
+        front1h = min(min(self.scan_ranges[p17:p19]))
+
 
         obstacle_distance = min(
             min(self.scan_ranges[0:left_range]),
@@ -101,7 +127,7 @@ class Turtlebot3ObstacleDetection(Node):
 
         self.cmd_vel_pub.publish(twist)
 
-
+        
 def main(args=None):
     rclpy.init(args=args)
     turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
