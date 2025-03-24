@@ -112,9 +112,18 @@ class Turtlebot3ObstacleDetection(Node):
         front2h = min(self.scan_ranges[p15:p17])
         front1h = min(self.scan_ranges[p17:p19])
 
+        # Decision making variable to decide whether to turn left or right:
+        # Right variable:
+        turn_left = min(front1v, front2v)
+        turn_right = min(front1h, front2h)
+
         # Angular velocity calculation with safety check
-        if front > 0.1:  # Avoid division by zero
-            self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front) / 5) # Adjust the division here to modify the turning speed
+        if front > 0.1: # Avoid division by zero
+            # If we need the robot to turn right we will calculate the angular velocity to be negative:
+            if turn_right > turn_left:
+                self.tele_twist.angular.z = (-1)*((np.pi / 2) * (self.tele_twist.linear.x / front) / 5) # Adjust the division here to modify the turning speed
+            else:
+                 self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front) / 5) # Adjust the division here to modify the turning speed
         else:
             self.tele_twist.angular.z = 0.5  # Default turn rate if too close
 
@@ -123,9 +132,6 @@ class Turtlebot3ObstacleDetection(Node):
             # Taking the minimum of the front three cones:
             front, front1v, front1h
         )
-
-        # Decision making variable to decide whether to turn left or right:
-        # Right variable:
 
         twist = Twist()
 
