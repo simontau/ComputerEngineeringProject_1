@@ -37,7 +37,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.scan_ranges = []
         self.has_scan_received = False
 
-        self.stop_distance = 0.4
+        self.stop_distance = 0.2
         self.turn_distance = 0.5
         self.tele_twist = Twist()
         self.tele_twist.linear.x = 0.1
@@ -80,8 +80,8 @@ class Turtlebot3ObstacleDetection(Node):
                 self.scan_ranges[i] = 3.5
 
         # Splitting into cones:
-        left_range = int(len(self.scan_ranges) / 4)
-        right_range = int(len(self.scan_ranges) * 3 / 4)
+        #left_range = int(len(self.scan_ranges) / 4)
+        #right_range = int(len(self.scan_ranges) * 3 / 4)
         
         # New points in the circle of the sensor.
         # Each name is: px (where x is x/20)
@@ -101,42 +101,45 @@ class Turtlebot3ObstacleDetection(Node):
         #print(f"Right readings: {self.scan_ranges[right_range:len(self.scan_ranges)]}")
 
         # Taking the minimum of each reading of each cone:
-        front = min(min(self.scan_ranges[p19: p1]))
-        front1v = min(min(self.scan_ranges[p1:p3]))
-        front2v = min(min(self.scan_ranges[p3:p5]))
-        back2v = min(min(self.scan_ranges[p5:p7]))
-        back1v = min(min(self.scan_ranges[p7:p9]))
-        back = min(min(self.scan_ranges[p9:p11]))
-        back1h = min(min(self.scan_ranges[p11:p13]))
-        back2h = min(min(self.scan_ranges[p13:p15]))
-        front2h = min(min(self.scan_ranges[p15:p17]))
-        front1h = min(min(self.scan_ranges[p7:p19]))
+        front = min(min(self.scan_ranges[p19:]), min(self.scan_ranges[:p1]))
+        front1v = min(self.scan_ranges[p1:p3])
+        front2v = min(self.scan_ranges[p3:p5])
+        back2v = min(self.scan_ranges[p5:p7])
+        back1v = min(self.scan_ranges[p7:p9])
+        back = min(self.scan_ranges[p9:p11])
+        back1h = min(self.scan_ranges[p11:p13])
+        back2h = min(self.scan_ranges[p13:p15])
+        front2h = min(self.scan_ranges[p15:p17])
+        front1h = min(self.scan_ranges[p17:p19])
 
-        # Angular velocity calculation:
-        self.tele_twist.angular.z = (np.pi / 2) * (self.tele_twist.linear.x / front)
-        
+        # Angular velocity calculation with safety check
+        if front > 0.1:  # Avoid division by zero
+            self.tele_twist.angular.z = (np.pi / 2) * (self.tele_twist.linear.x / front)
+        else:
+            self.tele_twist.angular.z = 0.5  # Default turn rate if too close
+
+        # Defining the obstacle distance to make the robot turn:
         obstacle_distance = min(
-            min(self.scan_ranges[0:left_range]),
-            min(self.scan_ranges[right_range:360])
+            # Taking the minimum of the front three cones:
+            front, front1v, front1h
         )
         twist = Twist()
 
-        # Cases for navigation:
-        # Case if nothing is in front of the robot:
-        if front > self.turn_distance:
-            # Moving forward with 0.1 m/s
-            twist.linear.x = 0.1
-
-        
-
+        # Better logic flow with elif statements
         if obstacle_distance < self.stop_distance:
             twist.linear.x = 0.0
             twist.angular.z = self.tele_twist.angular.z
-            self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m', throttle_duration_sec=2)
+            self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m')
+        elif obstacle_distance < self.turn_distance:
+            # Slower forward HAVE TO BE MODIFIED SINCE ITS HARDCODED
+            twist.linear.x = 0.05 
+            twist.angular.z = self.tele_twist.angular.z
+            self.get_logger().info(f'Obstacle ahead, slowing. Distance: {obstacle_distance:.2f} m')
         else:
-            twist = self.tele_twist
+            twist.linear.x = 0.1
+            twist.angular.z = 0.0
 
-        # Publishing the twist:
+        # Publishing the twist
         self.cmd_vel_pub.publish(twist)
 
         
