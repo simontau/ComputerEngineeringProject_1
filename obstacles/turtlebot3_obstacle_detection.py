@@ -114,7 +114,7 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Angular velocity calculation with safety check
         if front > 0.1:  # Avoid division by zero
-            self.tele_twist.angular.z = (np.pi / 2) * (self.tele_twist.linear.x / front)
+            self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front) / 5) # Adjust the division here to modify the turning speed
         else:
             self.tele_twist.angular.z = 0.5  # Default turn rate if too close
 
@@ -123,6 +123,10 @@ class Turtlebot3ObstacleDetection(Node):
             # Taking the minimum of the front three cones:
             front, front1v, front1h
         )
+
+        # Decision making variable to decide whether to turn left or right:
+        # Right variable:
+
         twist = Twist()
 
         # Better logic flow with elif statements
@@ -131,8 +135,8 @@ class Turtlebot3ObstacleDetection(Node):
             twist.angular.z = self.tele_twist.angular.z
             self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m')
         elif obstacle_distance < self.turn_distance:
-            # Slower forward HAVE TO BE MODIFIED SINCE ITS HARDCODED
-            twist.linear.x = 0.05 
+            # Slower forward. Adjust the angular velocity subtracted to modify:
+            twist.linear.x = 0.15 - abs(self.tele_twist.angular.z)
             twist.angular.z = self.tele_twist.angular.z
             self.get_logger().info(f'Obstacle ahead, slowing. Distance: {obstacle_distance:.2f} m')
         else:
