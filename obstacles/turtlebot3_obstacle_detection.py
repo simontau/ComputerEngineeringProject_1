@@ -101,6 +101,7 @@ class Turtlebot3ObstacleDetection(Node):
         #print(f"Right readings: {self.scan_ranges[right_range:len(self.scan_ranges)]}")
 
         # Taking the minimum of each reading of each cone:
+        #front_test = min(min(self.scan_ranges[int(len(self.scan_ranges)*37/40):]), min(self.scan_ranges[:int(len(self.scan_ranges)*3/40)]))
         front = min(min(self.scan_ranges[p19:]), min(self.scan_ranges[:p1]))
         front1v = min(self.scan_ranges[p1:p3])
         front2v = min(self.scan_ranges[p3:p5])
@@ -117,6 +118,9 @@ class Turtlebot3ObstacleDetection(Node):
         turn_left = min(front1v, front2v)
         turn_right = min(front1h, front2h)
 
+        # Wheel protection to make sure we have no colissions:
+        wheel_protection = min(front1v, front1h)
+
         # Angular velocity calculation with safety check
         if front > 0.1: # Avoid division by zero
             # If we need the robot to turn right we will calculate the angular velocity to be negative:
@@ -128,10 +132,13 @@ class Turtlebot3ObstacleDetection(Node):
             self.tele_twist.angular.z = 0.5  # Default turn rate if too close
 
         # Defining the obstacle distance to make the robot turn:
-        obstacle_distance = min(
-            # Taking the minimum of the front three cones:
-            front, front1v, front1h
-        )
+#        obstacle_distance = min(
+#            # Taking the minimum of the front three cones:
+#            front, front1v, front1h
+#        )
+
+        # Testing. Narrowing down the cone in front. It works pretty good.
+        obstacle_distance = front
 
         twist = Twist()
 
@@ -140,11 +147,17 @@ class Turtlebot3ObstacleDetection(Node):
             twist.linear.x = 0.0
             twist.angular.z = self.tele_twist.angular.z
             self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m')
-        elif obstacle_distance < self.turn_distance:
+        elif obstacle_distance < self.turn_distance or wheel_protection < 0.1:
             # Slower forward. Adjust the angular velocity subtracted to modify:
             twist.linear.x = 0.15 - abs(self.tele_twist.angular.z)
-            twist.angular.z = self.tele_twist.angular.z
-            self.get_logger().info(f'Obstacle ahead, slowing. Distance: {obstacle_distance:.2f} m')
+            # Making the turns happen faster:
+            # If linear speed is very low we will multiply the turning speed by a factor of x.
+            if twist.linear.x < 0.02:
+                # Multiplying the angular speed with a factor of x:
+                twist.angular.z = 2*self.tele_twist.angular.z
+            else:
+                twist.angular.z = self.tele_twist.angular.z
+            #self.get_logger().info(f'Obstacle ahead, slowing. Distance: {obstacle_distance:.2f} m')
         else:
             twist.linear.x = 0.1
             twist.angular.z = 0.0
