@@ -43,6 +43,11 @@ class Turtlebot3ObstacleDetection(Node):
         self.tele_twist.linear.x = 0.1
         self.tele_twist.angular.z = 0.0
 
+        # Variables to calculate average speed:
+        self.average_linear_speed = 0
+        self.speed_updates = 0
+        self.speed_accumulation = 0
+
         qos = QoSProfile(depth=10)
 
         self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', qos)
@@ -78,7 +83,7 @@ class Turtlebot3ObstacleDetection(Node):
         for i in range(len(self.scan_ranges)):
             if self.scan_ranges[i] == 0.0:
                 self.scan_ranges[i] = 3.5
-
+    
         # Splitting into cones:
         #left_range = int(len(self.scan_ranges) / 4)
         #right_range = int(len(self.scan_ranges) * 3 / 4)
@@ -162,14 +167,25 @@ class Turtlebot3ObstacleDetection(Node):
             twist.linear.x = 0.1
             twist.angular.z = 0.0
 
+        self.speed_updates += 1
+        self.speed_accumulation += twist.linear.x
+
         # Publishing the twist
         self.cmd_vel_pub.publish(twist)
-
+    
+    def average_speed_calculation(self):
+        if self.speed_updates > 0:
+            return self.speed_accumulation / self.speed_updates
+        else:
+            return 0.0
         
 def main(args=None):
     rclpy.init(args=args)
     turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
     rclpy.spin(turtlebot3_obstacle_detection)
+
+    average_speed = turtlebot3_obstacle_detection.average_speed_calculation()
+    print(f'The average speed was {average_speed}')
 
     turtlebot3_obstacle_detection.destroy_node()
     rclpy.shutdown()
