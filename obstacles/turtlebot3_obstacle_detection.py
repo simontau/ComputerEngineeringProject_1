@@ -34,6 +34,9 @@ class Turtlebot3ObstacleDetection(Node):
         print('stop distance: 0.5 m')
         print('----------------------------------------------')
 
+        self.run_duration = 30 # seconds
+        self.start_time = None
+
         self.scan_ranges = []
         self.has_scan_received = False
 
@@ -74,6 +77,19 @@ class Turtlebot3ObstacleDetection(Node):
         self.tele_twist = msg
 
     def timer_callback(self):
+        # Record the start time when this function is first called
+        if self.start_time is None:
+            self.start_time = self.get_clock().now()
+
+        current_time = self.get_clock().now()
+        elapsed_time = (current_time - self.start_time).nanoseconds * 1e-9
+
+        # If time exceeds run_duration, stop and shut down
+        if elapsed_time >= self.run_duration:
+            self.stop_and_shutdown()
+            return
+
+        # Otherwise, do normal obstacle detection
         if self.has_scan_received:
             self.detect_obstacle()
 
@@ -81,7 +97,7 @@ class Turtlebot3ObstacleDetection(Node):
         # Filtering the readings:
         # Looping through the array and substituing each 0 reading with 3.5
         for i in range(len(self.scan_ranges)):
-            if self.scan_ranges[i] == 0.0:
+            if self.scan_ranges[i] < 0.05:
                 self.scan_ranges[i] = 3.5
     
         # Splitting into cones:
@@ -144,6 +160,8 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Testing. Narrowing down the cone in front. It works pretty good.
         obstacle_distance = front
+        print(f"p1 readings: {self.scan_ranges[p1]}")
+        print(f"p19 readings: {self.scan_ranges[p19]}")
 
         twist = Twist()
 
@@ -179,17 +197,25 @@ class Turtlebot3ObstacleDetection(Node):
         else:
             return 0.0
         
+    def stop_and_shutdown(self):
+        # Publish zero velocity to stop the robot
+        stop_twist = Twist()
+        stop_twist.linear.x = 0.0
+        stop_twist.angular.z = 0.0
+        self.cmd_vel_pub.publish(stop_twist)
+
+        # Print the average speed
+        avg_speed = self.average_speed_calculation()
+        print(f'The average speed was {avg_speed} m/s over {self.run_duration} seconds.')
+
+        # Now shut down
+        rclpy.shutdown()
+        
 def main(args=None):
     rclpy.init(args=args)
     turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
     rclpy.spin(turtlebot3_obstacle_detection)
-
-    average_speed = turtlebot3_obstacle_detection.average_speed_calculation()
-    print(f'The average speed was {average_speed}')
-
     turtlebot3_obstacle_detection.destroy_node()
-    rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
