@@ -142,10 +142,18 @@ class Turtlebot3ObstacleDetection(Node):
         # Wheel protection to make sure we have no colissions:
         #wheel_protection = min(front1v, front1h)
 
+        # Special case for first condition beneath:
+        pocket_escape_values = [front, front1v, front2v, front1h, front2h]
+        pocket_threshold = 0.2
+
         # Angular velocity calculation with safety check
         if front > 0.1: # Avoid division by zero
+            # Special case: If the robot is stuck in a u-shaped pocket it needs to turn around really fast:
+            if all(value < pocket_threshold for value in pocket_escape_values):
+                # Turn really fast:
+                self.tele_twist.angular.z = 2.0
             # If we need the robot to turn right we will calculate the angular velocity to be negative:
-            if turn_right > turn_left:
+            elif turn_right > turn_left:
                 self.tele_twist.angular.z = (-1)*((np.pi / 2) * (self.tele_twist.linear.x / front) / 6) # Adjust the division here to modify the turning speed
             else:
                  self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front) / 6) # Adjust the division here to modify the turning speed
@@ -175,9 +183,9 @@ class Turtlebot3ObstacleDetection(Node):
             twist.linear.x = 0.3 - abs(self.tele_twist.angular.z)
             # Making the turns happen faster:
             # If linear speed is very low we will multiply the turning speed by a factor of x.
-            if twist.linear.x < 0.05:
+            if twist.linear.x < 0.07:
                 # Multiplying the angular speed with a factor of x:
-                twist.angular.z = 3*self.tele_twist.angular.z
+                twist.angular.z = 4*self.tele_twist.angular.z
             else:
                 twist.angular.z = self.tele_twist.angular.z
             #self.get_logger().info(f'Obstacle ahead, slowing. Distance: {obstacle_distance:.2f} m')
