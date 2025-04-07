@@ -23,6 +23,8 @@ from rclpy.qos import qos_profile_sensor_data
 from rclpy.qos import QoSProfile
 from sensor_msgs.msg import LaserScan
 import numpy as np
+import threading
+import time
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -34,7 +36,7 @@ class Turtlebot3ObstacleDetection(Node):
         print('stop distance: 0.5 m')
         print('----------------------------------------------')
 
-        self.run_duration = 120 # seconds
+        self.run_duration = 30 # seconds
         self.start_time = None
 
         self.scan_ranges = []
@@ -50,6 +52,10 @@ class Turtlebot3ObstacleDetection(Node):
         self.average_linear_speed = 0
         self.speed_updates = 0
         self.speed_accumulation = 0
+
+        # Collusion counter variable:
+        self.collision_count = 0
+        self.collision_flag = False
 
         qos = QoSProfile(depth=10)
 
@@ -75,6 +81,17 @@ class Turtlebot3ObstacleDetection(Node):
 
     def cmd_vel_raw_callback(self, msg):
         self.tele_twist = msg
+
+    # Global thread function to detect colissions, pause and then register 1 collision:
+    def collision_counter(self):
+        # Checks if a flag should open:
+        if not self.collision_flag:
+            self.collision_flag = True
+            # Increment the counter by exactly 1 collision:
+            self.collision_count += 1
+            # Debounce periode
+            time.sleep(1)
+            self.collision_flag = False
 
     def timer_callback(self):
         # Record the start time when this function is first called
@@ -136,8 +153,8 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Decision making variable to decide whether to turn left or right:
         # Right variable:
-        turn_left = front1v #min(front1v,front2v) Add this in the paranthesses if needed. We removed it to do some test
-        turn_right = front1h #min(front1h) front2h) Add this in the paranthesses if needed. We removed it to do some test
+        turn_left = front1v # min(front1v,front2v) Add this in the paranthesses if needed. We removed it to do some test
+        turn_right = front1h # min(front1h) front2h) Add this in the paranthesses if needed. We removed it to do some test
 
         # Wheel protection to make sure we have no colissions:
         #wheel_protection = min(front1v, front1h)
@@ -146,6 +163,14 @@ class Turtlebot3ObstacleDetection(Node):
         pocket_escape_values = [front, front1v, front2v, front1h, front2h]
         pocket_threshold = 0.2
 
+        #collition counter thread function call
+        if front < 0.2 and self.tele_twist.linear.x > 0:
+            # Starting the thread to register one collusion only
+            prediction_number = (front * self.tele_twist.angular.z) / self.tele_twist.linear.x
+            if prediction_number < 0.15:
+                print('Collision!!!!!!!!')
+                threading.Thread(target=self.collision_counter).start()
+        
         # Angular velocity calculation with safety check
         if front > 0.1: # Avoid division by zero
             # Special case: If the robot is stuck in a u-shaped pocket it needs to turn around really fast:
@@ -215,6 +240,9 @@ class Turtlebot3ObstacleDetection(Node):
         # Print the average speed
         avg_speed = self.average_speed_calculation()
         print(f'The average speed was {avg_speed} m/s over {self.run_duration} seconds.')
+
+        # Print the amount of collision:
+        print(f'Total collisions registered: {self.collision_count}')
 
         # Now shut down
         rclpy.shutdown()
