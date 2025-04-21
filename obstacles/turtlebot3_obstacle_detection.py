@@ -36,7 +36,7 @@ class Turtlebot3ObstacleDetection(Node):
         print('stop distance: 0.5 m')
         print('----------------------------------------------')
 
-        self.run_duration = 30 # seconds
+        self.run_duration = 60 # seconds
         self.start_time = None
 
         self.scan_ranges = []
@@ -90,7 +90,7 @@ class Turtlebot3ObstacleDetection(Node):
             # Increment the counter by exactly 1 collision:
             self.collision_count += 1
             # Debounce periode
-            time.sleep(1)
+            time.sleep(2)
             self.collision_flag = False
 
     def timer_callback(self):
@@ -162,12 +162,15 @@ class Turtlebot3ObstacleDetection(Node):
         # Special case for first condition beneath:
         pocket_escape_values = [front, front1v, front2v, front1h, front2h]
         pocket_threshold = 0.2
+        # Expanding the collision detection cones:
+        collision_cones = min(front, front1v, front1h)
 
         #collition counter thread function call
-        if front < 0.2 and self.tele_twist.linear.x > 0:
+        if collision_cones < 0.2 and self.tele_twist.linear.x > 0:
             # Starting the thread to register one collusion only
-            prediction_number = (front * self.tele_twist.angular.z) / self.tele_twist.linear.x
-            if prediction_number < 0.15:
+            prediction_number = abs(front / self.tele_twist.linear.x)
+            print(prediction_number)
+            if prediction_number < 0.65:
                 print('Collision!!!!!!!!')
                 threading.Thread(target=self.collision_counter).start()
         
@@ -202,7 +205,7 @@ class Turtlebot3ObstacleDetection(Node):
         if obstacle_distance < self.stop_distance:
             twist.linear.x = 0.0
             twist.angular.z = self.tele_twist.angular.z
-            self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m')
+            #self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m')
         elif obstacle_distance < self.turn_distance:
             # Slower forward. Adjust the angular velocity subtracted to modify:
             twist.linear.x = 0.3 - abs(self.tele_twist.angular.z)
