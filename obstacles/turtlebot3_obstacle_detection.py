@@ -25,6 +25,7 @@ from sensor_msgs.msg import LaserScan
 import numpy as np
 import threading
 import time
+import smbus
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -36,7 +37,7 @@ class Turtlebot3ObstacleDetection(Node):
         print('stop distance: 0.5 m')
         print('----------------------------------------------')
 
-        self.run_duration = 60 # seconds
+        self.run_duration = 10 # seconds
         self.start_time = None
 
         self.scan_ranges = []
@@ -56,6 +57,14 @@ class Turtlebot3ObstacleDetection(Node):
         # Collusion counter variable:
         self.collision_count = 0
         self.collision_flag = False
+
+        # Variables for LED sensor:
+        # Get I2C bus
+        self.bus = smbus.SMBus(1)  # or smbus.SMBus(0)
+        # ISL29125 address, 0x44(68)
+        # Select configuration-1 register, 0x01(01)
+        # 0x05: Operation: RGB, Range: 360 lux, Res: 16 Bits (as per datasheet)
+        self.bus.write_byte_data(0x44, 0x01, 0x05)
 
         qos = QoSProfile(depth=10)
 
@@ -93,6 +102,47 @@ class Turtlebot3ObstacleDetection(Node):
             time.sleep(2)
             self.collision_flag = False
 
+    # Function for LED sensor:
+    def getAndUpdateColour(self):
+
+        # Data variables for LED:
+        # Read 6 bytes starting from register 0x09
+        self.data = self.bus.read_i2c_block_data(0x44, 0x09, 6)
+        
+        # Correctly convert the data to red, green, and blue int values
+        self.green = 0.9 * (self.data[1] + self.data[0] / 256) # Index 0 (green low) and Index 1 (green high)
+        self.red = self.data[3] + self.data[2] / 256 # Index 2 (red low) and Index 3 (red high)
+        self.blue = (self.data[5] + self.data[4] / 256) * 2 # Index 4 (blue low) and Index 5 (blue high). Multiplied by 2 due to measurement failure.
+
+        # Tolerence percent to detect undefined colors:
+        self.tolerance_percent = 12
+
+        # Count average to ensure detection of undefined colors:
+        self.avg = (self.red + self.green + self.blue) / 3
+
+        # Avoid division by 0:
+        if self.avg == 0:
+            print('Error reading equals 0')
+            return
+
+        # Calculation of difference between the colors:
+        self.diff_r = abs(self.red - self.avg) / self.avg * 100
+        self.diff_g = abs(self.green - self.avg) / self.avg * 100
+        self.diff_b = abs(self.blue - self.avg) / self.avg * 100
+
+        # Checking the different conditions and printing the color:
+        if self.diff_r < self.tolerance_percent and self.diff_g < self.tolerance_percent and self.diff_b < self.tolerance_percent:
+            print("Undefined color")
+        elif self.red > self.green and self.red > self.blue:
+            print("Red")
+        elif self.green > self.red and self.green > self.blue:
+            print("Green")
+        else:
+            print("Blue")
+
+        # Output data to the console as RGB values
+        print("RGB(%d, %d, %d)" % (self.red, self.green, self.blue))
+
     def timer_callback(self):
         # Record the start time when this function is first called
         if self.start_time is None:
@@ -109,6 +159,9 @@ class Turtlebot3ObstacleDetection(Node):
         # Otherwise, do normal obstacle detection
         if self.has_scan_received:
             self.detect_obstacle()
+
+        # Call the function to start reading and updating colour values
+        self.getAndUpdateColour()
 
     def detect_obstacle(self):
         # Filtering the readings:
@@ -169,9 +222,9 @@ class Turtlebot3ObstacleDetection(Node):
         if collision_cones < 0.2 and self.tele_twist.linear.x > 0:
             # Starting the thread to register one collusion only
             prediction_number = abs(front / self.tele_twist.linear.x)
-            print(prediction_number)
+            #print(prediction_number)
             if prediction_number < 0.65:
-                print('Collision!!!!!!!!')
+                #print('Collision!!!!!!!!')
                 threading.Thread(target=self.collision_counter).start()
         
         # Angular velocity calculation with safety check
@@ -251,6 +304,7 @@ class Turtlebot3ObstacleDetection(Node):
         rclpy.shutdown()
         
 def main(args=None):
+
     rclpy.init(args=args)
     turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
     rclpy.spin(turtlebot3_obstacle_detection)
