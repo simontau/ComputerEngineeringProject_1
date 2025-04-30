@@ -26,6 +26,8 @@ import numpy as np
 import threading
 import time
 import smbus
+import RPi.GPIO as GPIO
+from gpiozero import LED
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -37,7 +39,7 @@ class Turtlebot3ObstacleDetection(Node):
         print('stop distance: 0.5 m')
         print('----------------------------------------------')
 
-        self.run_duration = 10 # seconds
+        self.run_duration = 40 # seconds
         self.start_time = None
 
         self.scan_ranges = []
@@ -57,6 +59,16 @@ class Turtlebot3ObstacleDetection(Node):
         # Collusion counter variable:
         self.collision_count = 0
         self.collision_flag = False
+
+        # Victim counter variable:
+        self.victim_flag = False
+        self.victim_reading_threshold= 4
+        self.victim_readings = 0
+        self.victims_counted = 0
+
+        # Variable for LED light:
+        # Led object (GPIO 18)
+        self.led = LED(18)
 
         # Variables for LED sensor:
         # Get I2C bus
@@ -82,7 +94,7 @@ class Turtlebot3ObstacleDetection(Node):
             self.cmd_vel_raw_callback,
             qos_profile=qos_profile_sensor_data)
 
-        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.timer = self.create_timer(0.05, self.timer_callback)
 
     def scan_callback(self, msg):
         self.scan_ranges = msg.ranges
@@ -102,6 +114,20 @@ class Turtlebot3ObstacleDetection(Node):
             time.sleep(2)
             self.collision_flag = False
 
+
+    # Global thread victim counter function going into victim detection state:
+    def victim_counter(self):
+        if not self.victim_flag:
+            self.led.on()
+            print('We have registered one victim.')
+            self.victim_flag = True
+            # Increment counter by 1:
+            self.victims_counted += 1
+            # Debounce period:
+            time.sleep(2)
+            self.led.off()
+            self.victim_flag = False
+
     # Function for LED sensor:
     def getAndUpdateColour(self):
 
@@ -112,7 +138,7 @@ class Turtlebot3ObstacleDetection(Node):
         # Correctly convert the data to red, green, and blue int values
         self.green = 0.9 * (self.data[1] + self.data[0] / 256) # Index 0 (green low) and Index 1 (green high)
         self.red = self.data[3] + self.data[2] / 256 # Index 2 (red low) and Index 3 (red high)
-        self.blue = (self.data[5] + self.data[4] / 256) * 2 # Index 4 (blue low) and Index 5 (blue high). Multiplied by 2 due to measurement failure.
+        self.blue = (self.data[5] + self.data[4] / 256) # Index 4 (blue low) and Index 5 (blue high).
 
         # Tolerence percent to detect undefined colors:
         self.tolerance_percent = 12
@@ -126,22 +152,34 @@ class Turtlebot3ObstacleDetection(Node):
             return
 
         # Calculation of difference between the colors:
-        self.diff_r = abs(self.red - self.avg) / self.avg * 100
+        self.diff_r = 1.25 * (abs(self.red - self.avg) / self.avg * 100)
         self.diff_g = abs(self.green - self.avg) / self.avg * 100
-        self.diff_b = abs(self.blue - self.avg) / self.avg * 100
+        self.diff_b = (abs(self.blue - self.avg) / self.avg * 100)
 
         # Checking the different conditions and printing the color:
         if self.diff_r < self.tolerance_percent and self.diff_g < self.tolerance_percent and self.diff_b < self.tolerance_percent:
-            print("Undefined color")
+            #print("Undefined color")
+            # Setting victim to 0:
+            self.victim_readings = 0
         elif self.red > self.green and self.red > self.blue:
             print("Red")
+            print("RGB(%d, %d, %d)" % (self.red, self.green, self.blue))
+            # Incrementing victim count:
+            self.victim_readings += 1
+            # If scanned victims count exceed the threadhold  then start the threading:
+            if self.victim_readings > self.victim_reading_threshold:
+                # Starting the threading
+                threading.Thread(target=self.victim_counter).start()
         elif self.green > self.red and self.green > self.blue:
-            print("Green")
+            #print("Green")
+            # Setting victim to 0:
+            self.victim_readings = 0
         else:
-            print("Blue")
+            #print("Blue")
+            # Setting victim to 0:
+            self.victim_readings = 0
 
         # Output data to the console as RGB values
-        print("RGB(%d, %d, %d)" % (self.red, self.green, self.blue))
 
     def timer_callback(self):
         # Record the start time when this function is first called
@@ -299,6 +337,9 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Print the amount of collision:
         print(f'Total collisions registered: {self.collision_count}')
+
+        # Print the amount of victims found:
+        print(f'Amount of victims found: {self.victims_counted}')
 
         # Now shut down
         rclpy.shutdown()
