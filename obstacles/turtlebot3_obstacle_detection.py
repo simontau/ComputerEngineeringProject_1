@@ -39,7 +39,7 @@ class Turtlebot3ObstacleDetection(Node):
         print('stop distance: 0.5 m')
         print('----------------------------------------------')
 
-        self.run_duration = 40 # seconds
+        self.run_duration = 60 # seconds
         self.start_time = None
 
         self.scan_ranges = []
@@ -48,7 +48,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.stop_distance = 0.2
         self.turn_distance = 0.4
         self.tele_twist = Twist()
-        self.tele_twist.linear.x = 0.2
+        self.tele_twist.linear.x = 0.21
         self.tele_twist.angular.z = 0.0
 
         # Variables to calculate average speed:
@@ -108,12 +108,12 @@ class Turtlebot3ObstacleDetection(Node):
         # Checks if a flag should open:
         if not self.collision_flag:
             self.collision_flag = True
+            print('A collision registered.')
             # Increment the counter by exactly 1 collision:
             self.collision_count += 1
             # Debounce periode
             time.sleep(2)
             self.collision_flag = False
-
 
     # Global thread victim counter function going into victim detection state:
     def victim_counter(self):
@@ -161,9 +161,9 @@ class Turtlebot3ObstacleDetection(Node):
             #print("Undefined color")
             # Setting victim to 0:
             self.victim_readings = 0
-        elif self.red > self.green and self.red > self.blue:
-            print("Red")
-            print("RGB(%d, %d, %d)" % (self.red, self.green, self.blue))
+        elif (self.red + 1) > self.green and (self.red + 1) > self.blue:
+            #print("Red")
+            #print("RGB(%d, %d, %d)" % (self.red, self.green, self.blue))
             # Incrementing victim count:
             self.victim_readings += 1
             # If scanned victims count exceed the threadhold  then start the threading:
@@ -249,10 +249,19 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Wheel protection to make sure we have no colissions:
         #wheel_protection = min(front1v, front1h)
+        
+        # Threshold variable for special cases:
+        pocket_threshold = 0.2
 
         # Special case for first condition beneath:
-        pocket_escape_values = [front, front1v, front2v, front1h, front2h]
-        pocket_threshold = 0.2
+        u_pocket_escape_values = [front, front1v, front2v, front1h, front2h]
+
+        # Special case for second condition beneath:
+        l_shape_escape_values_left = [front, front1h, front2h]
+
+        # Special case for second condition beneath:
+        l_shape_escape_values_right = [front, front1v, front2v]
+
         # Expanding the collision detection cones:
         collision_cones = min(front, front1v, front1h)
 
@@ -262,35 +271,42 @@ class Turtlebot3ObstacleDetection(Node):
             prediction_number = abs(front / self.tele_twist.linear.x)
             #print(prediction_number)
             if prediction_number < 0.65:
-                #print('Collision!!!!!!!!')
+                # Start threading of collision state:
                 threading.Thread(target=self.collision_counter).start()
         
+        
+        twist = Twist()
+        
         # Angular velocity calculation with safety check
-        if front > 0.1: # Avoid division by zero
+        if front > 0.15: # Avoid division by zero
             # Special case: If the robot is stuck in a u-shaped pocket it needs to turn around really fast:
-            if all(value < pocket_threshold for value in pocket_escape_values):
+            if all(value < pocket_threshold for value in u_pocket_escape_values):
                 # Turn really fast:
                 self.tele_twist.angular.z = 2.0
+            # Special case 2:
+            elif all(value < pocket_threshold for value in l_shape_escape_values_left):
+                self.tele_twist.angular.z = 1.5
+            # Special case 3:
+            elif all(value < pocket_threshold for value in l_shape_escape_values_right):
+                self.tele_twist.angular.z = -1.5
+            # Special case 4:
+            elif front < pocket_threshold and twist.linear.x < 0.05:
+                # Case if we hit a straight wall then we turn fast with the determined turning direction:
+                print('Straight wall case')
+                self.tele_twist.angular.z = (self.tele_twist.angular.z / abs(self.tele_twist.angular.z)) * 1.5
             # If we need the robot to turn right we will calculate the angular velocity to be negative:
             elif turn_right > turn_left:
-                self.tele_twist.angular.z = (-1)*((np.pi / 2) * (self.tele_twist.linear.x / front) / 6) # Adjust the division here to modify the turning speed
+                self.tele_twist.angular.z = (-1)*((np.pi / 2) * (self.tele_twist.linear.x / front) / 7) # Adjust the division here to modify the turning speed
             else:
-                 self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front) / 6) # Adjust the division here to modify the turning speed
+                 self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front) / 7) # Adjust the division here to modify the turning speed
         else:
             self.tele_twist.angular.z = 1.5  # Default turn rate if too close
-
-        # Defining the obstacle distance to make the robot turn:
-#        obstacle_distance = min(
-#            # Taking the minimum of the front three cones:
-#            front, front1v, front1h
-#        )
 
         # Testing. Narrowing down the cone in front. It works pretty good.
         obstacle_distance = front
         #print(f"p1 readings: {self.scan_ranges[p1]}")
         #print(f"p19 readings: {self.scan_ranges[p19]}")
 
-        twist = Twist()
 
         # Better logic flow with elif statements
         if obstacle_distance < self.stop_distance:
@@ -299,7 +315,7 @@ class Turtlebot3ObstacleDetection(Node):
             #self.get_logger().info(f'Obstacle detected! Stopping. Distance: {obstacle_distance:.2f} m')
         elif obstacle_distance < self.turn_distance:
             # Slower forward. Adjust the angular velocity subtracted to modify:
-            twist.linear.x = 0.3 - abs(self.tele_twist.angular.z)
+            twist.linear.x = 0.31 - (abs(self.tele_twist.angular.z) *6/7 ) # Multiply by 6/7 to keep the original linear speed despite of new angular speed.
             # Making the turns happen faster:
             # If linear speed is very low we will multiply the turning speed by a factor of x.
             if twist.linear.x < 0.07:
@@ -311,6 +327,8 @@ class Turtlebot3ObstacleDetection(Node):
         else:
             twist.linear.x = 0.2
             twist.angular.z = 0.0
+
+        print(twist.linear.x)
 
         self.speed_updates += 1
         self.speed_accumulation += twist.linear.x
