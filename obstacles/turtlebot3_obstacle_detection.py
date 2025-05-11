@@ -33,7 +33,7 @@ class Turtlebot3ObstacleDetection(Node):
 
     # Constants applied throughout the program:
     CONSTANTS = {
-        'RUN_DURATION': 40, # Seconds
+        'RUN_DURATION': 120, # Seconds
         'STOP_DISTANCE': 0.2, # Meters
         'TURN_DISTANCE': 0.4, # Meters
         'MIN_SCAN_DISTANCE': 0.05, # Meters, Used for filtering invalid scans
@@ -234,10 +234,10 @@ class Turtlebot3ObstacleDetection(Node):
         u_pocket_escape_values = [front_cone, front_left_cone, front_left_mid_cone, front_right_cone, front_right_mid_cone]
 
         # Special case: L-shaped obstacle on left
-        l_shape_escape_values_left = [front_cone, front_right_cone, front_right_mid_cone]
+        #l_shape_escape_values_left = [front_cone, front_right_cone, front_right_mid_cone]
 
         # Special case: L-shaped obstacle on right
-        l_shape_escape_values_right = [front_cone, front_left_cone, front_left_mid_cone]
+        #l_shape_escape_values_right = [front_cone, front_left_cone, front_left_mid_cone]
 
         # Check for collisions in front cones
         collision_cones = min(front_cone, front_left_cone, front_right_cone)
