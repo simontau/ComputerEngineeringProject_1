@@ -112,7 +112,7 @@ class Turtlebot3ObstacleDetection(Node):
         # Checks if a flag should open:
         if not self.collision_flag:
             self.collision_flag = True
-            #self.get_logger().info('A collision registered.')
+            self.get_logger().info('A collision registered.')
             # Increment the counter by exactly 1 collision:
             self.collision_count += 1
             # Debounce periode
@@ -145,7 +145,6 @@ class Turtlebot3ObstacleDetection(Node):
         self.green = 0.9 * (data[1] + data[0] / 256) # Index 0 (green low) and Index 1 (green high)
         self.red = data[3] + data[2] / 256 # Index 2 (red low) and Index 3 (red high)
         self.blue = (data[5] + data[4] / 256) # Index 4 (blue low) and Index 5 (bue high).
-        #print(f"red={red:.3f}, green={green:.3f}, blue={blue:.3f}")        # Tolerence percent to detect undefined colors:
         tolerance_percent = self.CONSTANTS['COLOR_TOLERANCE_PERCENT']
 
         # Count average to ensure detection of undefined colors:
@@ -207,7 +206,6 @@ class Turtlebot3ObstacleDetection(Node):
                 self.scan_ranges[i] = self.CONSTANTS['DEFAULT_DISTANCE']
         
         # Define cone indices for 360° scan (each cone is x/20 of the circle)
-        # Calculate cone indices from 0° to 25°
         cone_225_deg = int(len(self.scan_ranges) * 22.5/360)  # 25° position
         cone_18_deg = int(len(self.scan_ranges) * 1/20)   # 18°
         cone_54_deg = int(len(self.scan_ranges) * 3/20)   # 54°
@@ -233,12 +231,6 @@ class Turtlebot3ObstacleDetection(Node):
         # Special case: U-shaped pocket:
         u_pocket_escape_values = [front_cone, front_left_cone, front_left_mid_cone, front_right_cone, front_right_mid_cone]
 
-        # Special case: L-shaped obstacle on left
-        #l_shape_escape_values_left = [front_cone, front_right_cone, front_right_mid_cone]
-
-        # Special case: L-shaped obstacle on right
-        #l_shape_escape_values_right = [front_cone, front_left_cone, front_left_mid_cone]
-
         # Check for collisions in front cones
         collision_cones = min(front_cone, front_left_cone, front_right_cone)
 
@@ -254,48 +246,29 @@ class Turtlebot3ObstacleDetection(Node):
         
         # Calculate angular velocity for turning
         if front_cone > 0.15: # Avoid division by zero
-            # Special case: If the robot is stuck in a u-shaped pocket it needs to turn around really fast:
+            # Special case: If the robot is stuck in a U-shaped pocket it needs to turn around really fast:
             if all(value < self.CONSTANTS['POCKET_THRESHOLD'] for value in u_pocket_escape_values):
                 # Turn really fast:
                 self.tele_twist.angular.z = 2.0
-                #print('special case U pocket')
-            # Special case 2:
-            # elif all(value < self.CONSTANTS['POCKET_THRESHOLD'] for value in l_shape_escape_values_left):
-            #     self.tele_twist.angular.z = 1.5
-            #     print('special case L shape left')
-            # Special case 3:
-            # elif all(value < self.CONSTANTS['POCKET_THRESHOLD'] for value in l_shape_escape_values_right):
-            #     self.tele_twist.angular.z = -1.5
-            #     print('special case R shape right')
-            # Special case 4:
+            # Special case 2 (Straight wall case):
             elif front_cone < self.CONSTANTS['POCKET_THRESHOLD'] and twist.linear.x < 0.05:
                 # Case if we hit a straight wall then we turn fast with the determined turning direction:
                 self.tele_twist.angular.z = (self.tele_twist.angular.z / abs(self.tele_twist.angular.z)) * 1.5
-                #print('special case Wall')
             # Wheel protection case to the left:
             elif front_left_cone < self.CONSTANTS['WHEEL_PROTECTION_THRESHOLD'] and front_left_mid_cone > self.CONSTANTS['WHEEL_PROTECTION_THRESHOLD']:
-                #self.get_logger().info('Wheel protection case left.')
                 self.tele_twist.angular.z = -1.0
-                #print('Wheel protection case left')
             # Wheel protection case to the right:
             elif front_right_cone < self.CONSTANTS['WHEEL_PROTECTION_THRESHOLD'] and front_right_mid_cone > self.CONSTANTS['WHEEL_PROTECTION_THRESHOLD']:
-                #self.get_logger().info('Wheel protection case right.')
                 self.tele_twist.angular.z = 1.0
-                #print('Wheel protection case right')
             # If we need the robot to turn right we will calculate the angular velocity to be negative:
             elif turn_right > turn_left:
-                #print('Regular case to turn right')
+                # Linear regrssion analysis
                 self.tele_twist.angular.z = (-1) * (-14.0948 * front_cone**3 + 15.3461 * front_cone**2 - 8.9312 * front_cone + 2.1339)
-                #self.tele_twist.angular.z = (-1) * ((np.pi / 2) * (self.tele_twist.linear.x / front_cone) / 5) # Adjust the division here to modify the turning spee
-                #print('Normal turning case - right')
             else:
-                #print('Regular case to turn left')
+                # Linear regrssion analysis
                 self.tele_twist.angular.z = (-14.0948 * front_cone**3 + 15.3461 * front_cone**2 - 8.9312 * front_cone + 2.1339)
-                #self.tele_twist.angular.z = ((np.pi / 2) * (self.tele_twist.linear.x / front_cone) / 5) # Adjust the division here to modify the turning speed
-                #print('Normal turning case - left')
         else:
             self.tele_twist.angular.z = 1.5  # Default turn rate if too close
-            #print('Default turn rate')
 
         # Obstacle distance narrowed down to front cone:
         obstacle_distance = front_cone
@@ -306,16 +279,14 @@ class Turtlebot3ObstacleDetection(Node):
             twist.angular.z = self.tele_twist.angular.z
         elif small_front_cone < self.turn_distance or obstacle_distance < 0.25:
             # Slower forward. Adjust the angular velocity subtracted to modify:
+            #Linear regrssion analysis
             twist.linear.x = -0.3064 * front_cone**2 + 0.6223 * front_cone - 0.0188
-            #twist.linear.x = 0.31 - (abs(self.tele_twist.angular.z)) # Multiply by 6/7 to keep the original linear speed despite of new angular speed.
             # If linear speed is very low we will multiply the turning speed by a factor of x.
             if twist.linear.x < 0.07:
                 # Multiplying the angular speed with a factor of x:
                 twist.angular.z = 4*self.tele_twist.angular.z
             else:
                 twist.angular.z = self.tele_twist.angular.z
-            #print(f'Obstacle ahead, slowing. Distance: {obstacle_distance:.2f} m')
-            #print(self.tele_twist.angular.z)
         else:
             twist.linear.x = 0.2
             twist.angular.z = 0.0
